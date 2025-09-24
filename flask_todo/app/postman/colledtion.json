@@ -1,0 +1,576 @@
+{
+  "info": {
+    "_postman_id": "6a7b8c9d-eeee-4c4c-9999-444455556666",
+    "name": "Flask Todo API - Full Suite",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "postman"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth","register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "description": "Crée un utilisateur non confirmé et envoie un email de confirmation (Gmail SMTP)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"201 Created\", function(){ pm.response.to.have.status(201); });",
+                  "const user = pm.response.json();",
+                  "pm.test(\"User payload ok\", function(){",
+                  "  pm.expect(user).to.have.property(\"id\");",
+                  "  pm.expect(user).to.have.property(\"email\", pm.environment.get(\"email\").toLowerCase());",
+                  "});",
+                  "// Astuce: le lien de confirmation arrive par email (Gmail).",
+                  "// Si vous logguez le token côté backend ou le récupérez via logs, placez-le ci-dessous:",
+                  "// pm.environment.set('confirm_token', '<TOKEN>');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resend Confirmation (facultatif)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/resend-confirmation", "host": ["{{base_url}}"], "path": ["auth","resend-confirmation"] },
+            "body": { "mode": "raw", "raw": "{ \"email\": \"{{email}}\" }" },
+            "description": "Renvoie un email de confirmation si besoin."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" }
+            }
+          ]
+        },
+        {
+          "name": "Confirm Email (via token) - GET",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/confirm/{{confirm_token}}",
+              "host": ["{{base_url}}"],
+              "path": ["auth","confirm","{{confirm_token}}"]
+            },
+            "description": "Ouvre le lien reçu par email. Placez le token dans confirm_token."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if(!pm.environment.get('confirm_token')){",
+                  "  pm.execution.setNextRequest(null);",
+                  "  console.warn('⚠️ confirm_token manquant. Renseignez-le depuis l’email.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));",
+                  "const user = pm.response.json();",
+                  "pm.test(\"Email confirmé\", ()=> pm.expect(user.email_confirmed).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (envoi OTP)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{ \"email\": \"{{email}}\", \"password\": \"{{password}}\" }" },
+            "description": "Vérifie credentials et envoie un OTP par email."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));",
+                  "pm.test(\"Message OTP\", ()=> pm.expect(pm.response.json().message).to.include('OTP'));",
+                  "// Entrez l’OTP reçu par email dans la variable environment 'otp_code'."
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify OTP → Access & Refresh",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/verify-otp", "host": ["{{base_url}}"], "path": ["auth","verify-otp"] },
+            "body": { "mode": "raw", "raw": "{ \"email\": \"{{email}}\", \"code\": \"{{otp_code}}\" }" },
+            "description": "Échange OTP contre tokens JWT."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if(!pm.environment.get('otp_code')){",
+                  "  pm.execution.setNextRequest(null);",
+                  "  console.warn('⚠️ otp_code manquant. Renseignez le code reçu par email.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('access_token', data.access_token || '');",
+                  "pm.environment.set('refresh_token', data.refresh_token || '');",
+                  "pm.test(\"Access token présent\", ()=> pm.expect(pm.environment.get('access_token')).to.have.lengthOf.above(10));",
+                  "pm.test(\"Refresh token présent\", ()=> pm.expect(pm.environment.get('refresh_token')).to.have.lengthOf.above(10));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Access Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{refresh_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/auth/refresh", "host": ["{{base_url}}"], "path": ["auth","refresh"] },
+            "body": { "mode": "raw", "raw": "" },
+            "description": "Utilise le refresh token pour obtenir un nouvel access."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('access_token', data.access_token || '');",
+                  "pm.test(\"Nouveau access token\", ()=> pm.expect(pm.environment.get('access_token')).to.have.lengthOf.above(10));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request Password Reset (email)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/request-password-reset", "host": ["{{base_url}}"], "path": ["auth","request-password-reset"] },
+            "body": { "mode": "raw", "raw": "{ \"email\": \"{{email}}\" }" },
+            "description": "Envoie un email avec un token de reset (lien)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));",
+                  "// Placez le reset_token (depuis l’email) dans la variable d’environnement.",
+                  "// pm.environment.set('reset_token', '<TOKEN>');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset Password (avec token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/reset-password", "host": ["{{base_url}}"], "path": ["auth","reset-password"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"token\": \"{{reset_token}}\", \"new_password\": \"{{new_password}}\" }"
+            },
+            "description": "Change le mot de passe avec le token signé reçu par email."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if(!pm.environment.get('reset_token')){",
+                  "  pm.execution.setNextRequest(null);",
+                  "  console.warn('⚠️ reset_token manquant. Renseignez-le depuis l’email.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Me (GET)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users","me"] }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));",
+                  "const me = pm.response.json();",
+                  "pm.test(\"email_confirmed true\", ()=> pm.expect(me.email_confirmed).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users","me"] },
+            "body": { "mode": "raw", "raw": "{ \"full_name\": \"Alice Liddell\", \"username\": \"alice_yt\" }" }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/categories/", "host": ["{{base_url}}"], "path": ["categories",""] }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/categories/", "host": ["{{base_url}}"], "path": ["categories",""] },
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Perso\", \"description\": \"Tâches personnelles\" }" }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"201 Created\", ()=> pm.response.to.have.status(201));",
+                  "const cat = pm.response.json();",
+                  "pm.environment.set('category_id', String(cat.id));",
+                  "pm.test(\"category_id enregistré\", ()=> pm.expect(pm.environment.get('category_id')).to.not.equal(''));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/categories/{{category_id}}", "host": ["{{base_url}}"], "path": ["categories","{{category_id}}"] }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/categories/{{category_id}}", "host": ["{{base_url}}"], "path": ["categories","{{category_id}}"] },
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Perso+\", \"description\": \"Mise à jour\" }" }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/categories/{{category_id}}", "host": ["{{base_url}}"], "path": ["categories","{{category_id}}"] }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"204 No Content\", ()=> pm.response.to.have.status(204));"], "type": "text/javascript" } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/projects/", "host": ["{{base_url}}"], "path": ["projects",""] }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/projects/", "host": ["{{base_url}}"], "path": ["projects",""] },
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Projet YouTube\", \"description\": \"Demo Flask cours\" }" }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"201 Created\", ()=> pm.response.to.have.status(201));",
+                  "const proj = pm.response.json();",
+                  "pm.environment.set('project_id', String(proj.id));",
+                  "pm.test(\"project_id enregistré\", ()=> pm.expect(pm.environment.get('project_id')).to.not.equal(''));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["projects","{{project_id}}"] }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["projects","{{project_id}}"] },
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Projet YouTube+\", \"description\": \"Mise à jour\" }" }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["projects","{{project_id}}"] }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"204 No Content\", ()=> pm.response.to.have.status(204));"], "type": "text/javascript" } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/tasks/", "host": ["{{base_url}}"], "path": ["tasks",""] }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/tasks/", "host": ["{{base_url}}"], "path": ["tasks",""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Préparer miniatures\",\n  \"description\": \"YouTube\",\n  \"project_id\": {{project_id}},\n  \"category_id\": {{category_id}}\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"201 Created\", ()=> pm.response.to.have.status(201));",
+                  "const task = pm.response.json();",
+                  "pm.environment.set('task_id', String(task.id));",
+                  "pm.test(\"task_id enregistré\", ()=> pm.expect(pm.environment.get('task_id')).to.not.equal(''));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/tasks/{{task_id}}", "host": ["{{base_url}}"], "path": ["tasks","{{task_id}}"] }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/tasks/{{task_id}}", "host": ["{{base_url}}"], "path": ["tasks","{{task_id}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Préparer miniatures (v2)\",\n  \"description\": \"MAJ\",\n  \"is_done\": true,\n  \"project_id\": {{project_id}},\n  \"category_id\": {{category_id}}\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"200 OK\", ()=> pm.response.to.have.status(200));"], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/tasks/{{task_id}}", "host": ["{{base_url}}"], "path": ["tasks","{{task_id}}"] }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test(\"204 No Content\", ()=> pm.response.to.have.status(204));"], "type": "text/javascript" } }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Collection-level pre-request (peut rester vide ou log) ",
+          "if(!pm.environment.get('base_url')){",
+          "  throw new Error('base_url non défini dans l\\'environnement.');",
+          "}"
+        ],
+        "type": "text/javascript"
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "// Collection-level tests additionnels si besoin"
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ],
+  "variable": []
+}

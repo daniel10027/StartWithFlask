@@ -92,13 +92,15 @@ FLASK_APP=wsgi.py
 SECRET_KEY=dev-secret-change-me
 JWT_SECRET_KEY=dev-jwt-secret-change-me
 SQLALCHEMY_DATABASE_URI=sqlite:///dev.db
-MAIL_SERVER=localhost
-MAIL_PORT=1025
-MAIL_USE_TLS=false
+
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USE_TLS=true
 MAIL_USE_SSL=false
-MAIL_USERNAME=
-MAIL_PASSWORD=
-MAIL_DEFAULT_SENDER=no-reply@example.com
+MAIL_USERNAME=votre.adresse@gmail.com
+MAIL_PASSWORD=xxxxxxxxxxxxxxxx     # mot de passe d’application (16 chars)
+MAIL_DEFAULT_SENDER=votre.adresse@gmail.com
+
 API_TITLE=Todo API
 API_VERSION=1.0.0
 ```
@@ -234,7 +236,8 @@ def create_app():
 ### F. `wsgi.py`
 
 ```python
-from app import create_app
+from . import create_app
+
 app = create_app()
 if __name__ == "__main__":
     app.run(debug=True)
@@ -465,6 +468,7 @@ from flask_smorest import Blueprint, abort
 from flask import url_for
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
+from flask.views import MethodView
 
 from ..extensions import db
 from ..models import User
@@ -475,7 +479,7 @@ from ..utils import (hash_password, verify_password, generate_token, verify_toke
 blp = Blueprint("Auth", "auth", url_prefix="/auth", description="Endpoints d'authentification")
 
 @blp.route("/register")
-class RegisterResource:
+class RegisterResource(MethodView):
     @blp.arguments(RegisterSchema)
     @blp.response(201, UserOutSchema)
     def post(self, data):
@@ -495,7 +499,7 @@ class RegisterResource:
         return user
 
 @blp.route("/confirm/<string:token>")
-class ConfirmEmailResource:
+class ConfirmEmailResource(MethodView):
     @blp.response(200, UserOutSchema)
     def get(self, token):
         data = verify_token(token, salt="email-confirm", max_age_seconds=3600*24)
@@ -505,7 +509,7 @@ class ConfirmEmailResource:
         return user
 
 @blp.route("/resend-confirmation")
-class ResendConfirmResource:
+class ResendConfirmResource(MethodView):
     @blp.arguments(EmailOnlySchema)
     @blp.response(200, UserOutSchema)
     def post(self, data):
@@ -518,7 +522,7 @@ class ResendConfirmResource:
         return user
 
 @blp.route("/login")
-class LoginResource:
+class LoginResource(MethodView):
     @blp.arguments(LoginSchema)
     @blp.response(200, description="OTP envoyé si credentials valides")
     def post(self, data):
@@ -531,7 +535,7 @@ class LoginResource:
         return {"message": "OTP envoyé par email. Utilisez /auth/verify-otp."}
 
 @blp.route("/verify-otp")
-class VerifyOTPResource:
+class VerifyOTPResource(MethodView):
     @blp.arguments(OTPVerifySchema)
     @blp.response(200, description="Retourne access/refresh JWT")
     def post(self, data):
@@ -546,7 +550,7 @@ class VerifyOTPResource:
         return {"access_token": access, "refresh_token": refresh}
 
 @blp.route("/refresh")
-class RefreshResource:
+class RefreshResource(MethodView):
     @jwt_required(refresh=True)
     @blp.response(200)
     def post(self):
@@ -555,7 +559,7 @@ class RefreshResource:
         return {"access_token": access}
 
 @blp.route("/request-password-reset")
-class RequestPasswordResetResource:
+class RequestPasswordResetResource(MethodView):
     @blp.arguments(EmailOnlySchema)
     @blp.response(200)
     def post(self, data):
@@ -569,7 +573,7 @@ class RequestPasswordResetResource:
         return {"message": "Email de réinitialisation envoyé."}
 
 @blp.route("/reset-password")
-class PerformPasswordResetResource:
+class PerformPasswordResetResource(MethodView):
     @blp.arguments(PasswordResetSchema)
     @blp.response(200)
     def post(self, data):
@@ -585,6 +589,7 @@ class PerformPasswordResetResource:
 ## 11) Profil — `app/blueprints/users.py`
 
 ```python
+from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..extensions import db
@@ -594,7 +599,7 @@ from ..schemas import UserOutSchema, UserUpdateSchema
 blp = Blueprint("Users", "users", url_prefix="/users", description="Profil utilisateur")
 
 @blp.route("/me")
-class MeResource:
+class MeResource(MethodView):
     @jwt_required()
     @blp.response(200, UserOutSchema)
     def get(self):
@@ -631,11 +636,12 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..extensions import db
 from ..models import Category
 from ..schemas import CategoryInSchema, CategoryOutSchema
+from flask.views import MethodView
 
 blp = Blueprint("Categories", "categories", url_prefix="/categories", description="Catégories de tâches")
 
 @blp.route("/")
-class CategoryListResource:
+class CategoryListResource(MethodView):
     @jwt_required()
     @blp.response(200, CategoryOutSchema(many=True))
     def get(self):
@@ -653,7 +659,7 @@ class CategoryListResource:
         return cat
 
 @blp.route("/<int:cat_id>")
-class CategoryDetailResource:
+class CategoryDetailResource(MethodView):
     @jwt_required()
     @blp.response(200, CategoryOutSchema)
     def get(self, cat_id):
@@ -691,6 +697,7 @@ class CategoryDetailResource:
 ### `app/blueprints/projects.py`
 
 ```python
+from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..extensions import db
@@ -700,7 +707,7 @@ from ..schemas import ProjectInSchema, ProjectOutSchema
 blp = Blueprint("Projects", "projects", url_prefix="/projects", description="Projets")
 
 @blp.route("/")
-class ProjectListResource:
+class ProjectListResource(MethodView):
     @jwt_required()
     @blp.response(200, ProjectOutSchema(many=True))
     def get(self):
@@ -718,7 +725,7 @@ class ProjectListResource:
         return proj
 
 @blp.route("/<int:proj_id>")
-class ProjectDetailResource:
+class ProjectDetailResource(MethodView):
     @jwt_required()
     @blp.response(200, ProjectOutSchema)
     def get(self, proj_id):
@@ -756,6 +763,7 @@ class ProjectDetailResource:
 ### `app/blueprints/tasks.py`
 
 ```python
+from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..extensions import db
@@ -765,7 +773,7 @@ from ..schemas import TaskInSchema, TaskOutSchema
 blp = Blueprint("Tasks", "tasks", url_prefix="/tasks", description="Tâches (Todo)")
 
 @blp.route("/")
-class TaskListResource:
+class TaskListResource(MethodView):
     @jwt_required()
     @blp.response(200, TaskOutSchema(many=True))
     def get(self):
@@ -791,7 +799,7 @@ class TaskListResource:
         return task
 
 @blp.route("/<int:task_id>")
-class TaskDetailResource:
+class TaskDetailResource(MethodView):
     @jwt_required()
     @blp.response(200, TaskOutSchema)
     def get(self, task_id):
@@ -861,8 +869,6 @@ flask db upgrade
 
 ```bash
 flask run
-# SMTP debug
-python -m smtpd -c DebuggingServer -n localhost:1025
 ```
 
 ---
@@ -927,7 +933,7 @@ curl -X POST http://127.0.0.1:5000/auth/reset-password \
 
 ### Documentation
 
-* Swagger → `http://127.0.0.1:5000/docs`
+* Swagger → `http://127.0.0.1:5000/`
 * ReDoc → `http://127.0.0.1:5000/redoc`
 
 ---
