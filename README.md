@@ -1,115 +1,90 @@
 # Cours Complet Flask – De Zéro à API Todo Pro (JWT, OTP, Email, Swagger & ReDoc)
 
-## Table des matières
+## 🧭 Plan (pour votre chapitrage YouTube)
 
-1. [Introduction & Objectifs](#introduction--objectifs)
-2. [Pré-requis & Installation](#pré-requis--installation)
-3. [Créer le projet & l’architecture](#créer-le-projet--larchitecture)
-4. [Configuration & Extensions Flask](#configuration--extensions-flask)
-5. [Modèles (User, OTP, Category, Project, Task)](#modèles-user-otp-category-project-task)
-6. [Schémas (Marshmallow) & Validation](#schémas-marshmallow--validation)
-7. [Utilitaires : Hash, Emails, Tokens, OTP](#utilitaires--hash-emails-tokens-otp)
-8. [Blueprint Auth : Register, Confirm Email, Login + OTP, JWT, Reset Password](#blueprint-auth--register-confirm-email-login--otp-jwt-reset-password)
-9. [Blueprint Users : Profil](#blueprint-users--profil)
-10. [Blueprints Category, Project, Task (CRUD protégés)](#blueprints-category-project-task-crud-protégés)
-11. [Documentation OpenAPI : Swagger & ReDoc](#documentation-openapi--swagger--redoc)
-12. [Migrations & Lancement](#migrations--lancement)
-13. [Scénario de test (cURL/Postman)](#scénario-de-test-curlpostman)
-14. [Aller plus loin (sécurité, déploiement, CI)](#aller-plus-loin-sécurité-déploiement-ci)
-
----
-
-## Introduction & Objectifs
-
-À la fin de ce cours, vous saurez :
-
-* Installer et configurer **Flask** et ses extensions clés (SQLAlchemy, Migrate, JWT, Mail, Smorest/Marshmallow).
-* Concevoir une **API REST propre** avec **Blueprints** et **App Factory**.
-* Mettre en place un **authentification complète** : inscription, **confirmation par email**, **OTP**, **JWT (access/refresh)**, **réinitialisation de mot de passe**.
-* Créer des **endpoints CRUD** protégés (profil, catégories, projets, tâches).
-* Générer une **documentation OpenAPI** (Swagger UI & ReDoc) prête pour vos étudiants/consommateurs.
+1. Pourquoi Flask (vs Django/FastAPI)
+2. WSGI, l’objet `Flask`, cycle requête→réponse
+3. Architecture propre (App Factory, Blueprints, séparation des responsabilités)
+4. Environnements & configuration (.env, 12-Factor)
+5. Extensions essentielles (SQLAlchemy, Migrate, JWT, Smorest, Marshmallow, Mail, itsdangerous)
+6. Modélisation (User, OTP, Category, Project, Task) & ORM
+7. Validation & sérialisation (Marshmallow)
+8. Auth complète (Register, Confirm Email, Login+OTP, JWT, Refresh, Reset Password)
+9. CRUD sécurisés (Profil, Catégories, Projets, Tâches)
+10. Documentation OpenAPI (Swagger UI & ReDoc)
+11. Migrations, lancement & tests (cURL/Postman)
+12. Débogage & erreurs fréquentes
+13. Sécurité, déploiement & bonnes pratiques
+14. Annexes (checklists, glossaire, pistes d’évolution)
 
 ---
 
-## Pré-requis & Installation
+## 1) Pourquoi Flask ?
 
-### Outils nécessaires
+* **Micro-framework** simple : vous partez d’un noyau minimal (routes, requêtes, réponses) et **ajoutez** les briques dont vous avez besoin.
+* **Pédagogique** : chaque pièce est visible (ORM, JWT, OTP, Email, Doc).
+* **Comparaison rapide**
 
-* Python 3.11+
-* Git (facultatif)
-* Un éditeur (VS Code conseillé)
-* Un serveur SMTP de dev (au choix) :
+  * **Django** : “batteries incluses”, très structuré (admin, ORM, templates).
+  * **FastAPI** : ASGI, typage fort, doc auto de série.
+  * **Flask** : liberté, douceur d’apprentissage, écosystème mature.
 
-  * **Console SMTP** (simple) : `python -m smtpd -c DebuggingServer -n localhost:1025` (ou MailHog/Mailtrap)
-* (Facultatif) PostgreSQL pour prod — **on utilisera SQLite en dev**.
-
-### Créer un environnement
-
-```bash
-# Mac/Linux
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Windows PowerShell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-### requirements.txt (copiez/collez)
-
-```txt
-Flask==3.0.3
-Flask-SQLAlchemy==3.1.1
-Flask-Migrate==4.0.7
-Flask-JWT-Extended==4.6.0
-Flask-Smorest==0.44.0
-marshmallow==3.21.3
-marshmallow-sqlalchemy==1.0.0
-python-dotenv==1.0.1
-itsdangerous==2.2.0
-Flask-Mail==0.9.1
-email-validator==2.2.0
-```
-
-Installez :
-
-```bash
-pip install -r requirements.txt
-```
+**Quand choisir Flask ?** Quand vous voulez **comprendre** et **maîtriser** votre stack API de bout en bout.
 
 ---
 
-## Créer le projet & l’architecture
+## 2) WSGI, objet `Flask`, cycle requête→réponse
 
-Arborescence **simple & propre** :
+* **WSGI** : contrat entre serveur web (Gunicorn, uWSGI) et votre app Python.
+* **Objet `Flask`** : tient la config, les routes, les extensions, le contexte.
+* **Cycle**
+
+  1. Client → HTTP
+  2. Serveur WSGI → `app`
+  3. Résolution de route → exécution de la vue
+  4. Retour d’une `Response` (JSON ici)
+
+**Image** : Flask = chef d’orchestre ; extensions = musiciens ; WSGI = scène.
+
+---
+
+## 3) Architecture simple & propre
+
+**Objectif** : séparation nette des responsabilités.
 
 ```
 flask_todo/
 ├─ app/
-│  ├─ __init__.py
-│  ├─ extensions.py
-│  ├─ config.py
-│  ├─ models.py
-│  ├─ schemas.py
-│  ├─ utils.py
+│  ├─ __init__.py          # App Factory + enregistrement des blueprints
+│  ├─ extensions.py        # db, migrate, jwt, api, mail
+│  ├─ config.py            # Configuration centralisée (OpenAPI, Mail, JWT...)
+│  ├─ models.py            # ORM (User, OTP, Category, Project, Task)
+│  ├─ schemas.py           # Validation/serialization (Marshmallow)
+│  ├─ utils.py             # Hash, tokens, emails, OTP
 │  └─ blueprints/
-│     ├─ auth.py
-│     ├─ users.py
-│     ├─ categories.py
-│     ├─ projects.py
-│     └─ tasks.py
-├─ migrations/           (créé par Flask-Migrate)
-├─ .env
+│     ├─ auth.py           # Register/Confirm/Login+OTP/JWT/Reset
+│     ├─ users.py          # /users/me (profil)
+│     ├─ categories.py     # CRUD catégories
+│     ├─ projects.py       # CRUD projets
+│     └─ tasks.py          # CRUD tâches (liées cat/projet)
+├─ migrations/             # Généré par Flask-Migrate
+├─ .env                    # Secrets & URLs
 ├─ requirements.txt
-├─ wsgi.py
+├─ wsgi.py                 # Entrée (dev)
 └─ README.md
 ```
 
+**Pourquoi cette découpe ?**
+
+* **App Factory** : testable, configurable par environnement.
+* **Blueprints** : modules “plug-and-play” par domaine métier.
+* **Smorest** : doc OpenAPI générée depuis vos schémas & responses.
+
 ---
 
-## Configuration & Extensions Flask
+## 4) Environnements & configuration (.env, 12-Factor)
 
-### `.env` (dev)
+**.env (développement)** — mettez des valeurs simples, changez en prod :
 
 ```ini
 FLASK_ENV=development
@@ -128,9 +103,48 @@ API_TITLE=Todo API
 API_VERSION=1.0.0
 ```
 
-> En prod : changez les secrets, utilisez PostgreSQL et un vrai SMTP.
+**12-Factor** : ne committez pas vos secrets, passez par les variables d’environnement.
 
-### `app/extensions.py`
+---
+
+## 5) Extensions (rôle & intérêt)
+
+* **Flask-SQLAlchemy** : ORM → requêtes 💬 objets Python.
+* **Flask-Migrate** : migrations DB (via Alembic).
+* **Flask-JWT-Extended** : génération/validation des JWT (access & refresh).
+* **Flask-Smorest** : REST + OpenAPI (Swagger & ReDoc) depuis les schémas.
+* **Marshmallow** : validation/sérialisation des payloads.
+* **Flask-Mail** : envoi SMTP (OTP, confirmation, reset).
+* **itsdangerous** : tokens signés (confirm email / reset password).
+
+---
+
+## 6) Mise en place — Installation & App Factory
+
+### A. Créer l’environnement & installer
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### B. `requirements.txt`
+
+```txt
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.7
+Flask-JWT-Extended==4.6.0
+Flask-Smorest==0.44.0
+marshmallow==3.21.3
+marshmallow-sqlalchemy==1.0.0
+python-dotenv==1.0.1
+itsdangerous==2.2.0
+Flask-Mail==0.9.1
+email-validator==2.2.0
+```
+
+### C. `app/extensions.py`
 
 ```python
 from flask_sqlalchemy import SQLAlchemy
@@ -146,7 +160,7 @@ api = Api()
 mail = Mail()
 ```
 
-### `app/config.py`
+### D. `app/config.py`
 
 ```python
 import os
@@ -159,7 +173,7 @@ class Config:
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me-too")
     PROPAGATE_EXCEPTIONS = True
 
-    # Flask-Smorest / OpenAPI
+    # OpenAPI / Smorest
     API_TITLE = os.getenv("API_TITLE", "Todo API")
     API_VERSION = os.getenv("API_VERSION", "1.0.0")
     OPENAPI_VERSION = "3.0.3"
@@ -179,7 +193,7 @@ class Config:
     MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER", "no-reply@example.com")
 ```
 
-### `app/__init__.py` (App Factory + Blueprints)
+### E. `app/__init__.py`
 
 ```python
 from flask import Flask
@@ -192,14 +206,12 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Init extensions
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
     mail.init_app(app)
     api.init_app(app)
 
-    # Register blueprints (Smorest)
     from .blueprints.auth import blp as AuthBlp
     from .blueprints.users import blp as UsersBlp
     from .blueprints.categories import blp as CategoriesBlp
@@ -219,22 +231,20 @@ def create_app():
     return app
 ```
 
-### `wsgi.py`
+### F. `wsgi.py`
 
 ```python
 from app import create_app
-
 app = create_app()
-
 if __name__ == "__main__":
     app.run(debug=True)
 ```
 
 ---
 
-## Modèles (User, OTP, Category, Project, Task)
+## 7) Modélisation (ORM) — `app/models.py`
 
-### `app/models.py`
+**Idée** : un utilisateur possède catégories, projets et tâches. Un OTP est stocké séparément (hashé, expirant, consommable).
 
 ```python
 from datetime import datetime, timedelta
@@ -264,7 +274,6 @@ class OTPCode(BaseModel):
     code_hash = db.Column(db.String(255), nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.utcnow() + timedelta(minutes=10))
     consumed_at = db.Column(db.DateTime)
-
     user = db.relationship("User")
 
 class Category(BaseModel):
@@ -288,16 +297,16 @@ class Task(BaseModel):
     is_done = db.Column(db.Boolean, default=False)
     due_date = db.Column(db.DateTime)
 
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)       # propriétaire
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"))
     project_id = db.Column(db.Integer, db.ForeignKey("projects.id"))
 ```
 
 ---
 
-## Schémas (Marshmallow) & Validation
+## 8) Validation & Sérialisation — `app/schemas.py`
 
-### `app/schemas.py`
+**Principe** : un schéma d’entrée (*InSchema*) pour valider, un schéma de sortie (*OutSchema*) pour contrôler la réponse.
 
 ```python
 from marshmallow import Schema, fields, validates, ValidationError
@@ -308,7 +317,6 @@ class RegisterSchema(Schema):
     email = fields.Str(required=True)
     username = fields.Str(required=True)
     password = fields.Str(required=True, load_only=True)
-
     @validates("email")
     def validate_email(self, value):
         try:
@@ -372,9 +380,13 @@ class TaskOutSchema(TaskInSchema):
 
 ---
 
-## Utilitaires : Hash, Emails, Tokens, OTP
+## 9) Utilitaires (hash, tokens, emails, OTP) — `app/utils.py`
 
-### `app/utils.py`
+**Idées clés** :
+
+* Ne jamais stocker des codes en clair (hash OTP).
+* Tokens temporisés (itsdangerous) pour confirmation & reset.
+* Envoi email via Flask-Mail.
 
 ```python
 import secrets
@@ -383,18 +395,17 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from flask import current_app
 from flask_mail import Message
 from werkzeug.security import generate_password_hash, check_password_hash
-
 from .extensions import mail, db
 from .models import OTPCode, User
 
-# --- Password Hashing ---
+# Password Hash
 def hash_password(pwd: str) -> str:
     return generate_password_hash(pwd)
 
 def verify_password(pwd: str, pwd_hash: str) -> bool:
     return check_password_hash(pwd_hash, pwd)
 
-# --- Timed Tokens (email confirm / reset password) ---
+# Tokens signés
 def _serializer():
     return URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
 
@@ -409,35 +420,27 @@ def verify_token(token: str, salt: str, max_age_seconds: int = 3600) -> dict:
     except BadSignature:
         raise ValueError("Token invalide")
 
-# --- Email ---
+# Email
 def send_email(subject: str, recipients: list[str], body: str, html: str | None = None):
     msg = Message(subject=subject, recipients=recipients, body=body, html=html)
     mail.send(msg)
 
-# --- OTP ---
+# OTP
 def create_and_send_otp(user: User, purpose: str = "login") -> None:
-    # 6 chiffres
-    code = f"{secrets.randbelow(10**6):06d}"
+    code = f"{secrets.randbelow(10**6):06d}"   # 6 chiffres
     code_hash = hash_password(code)
     otp = OTPCode(user_id=user.id, purpose=purpose, code_hash=code_hash,
                   expires_at=datetime.utcnow() + timedelta(minutes=10))
     db.session.add(otp)
     db.session.commit()
-
-    send_email(
-        subject="[TodoAPI] Votre code OTP",
-        recipients=[user.email],
-        body=f"Votre code OTP est : {code} (valide 10 minutes).",
-    )
+    send_email("[TodoAPI] Votre code OTP", [user.email], f"Votre code OTP est : {code} (valide 10 minutes).")
 
 def verify_otp(user: User, code: str, purpose: str = "login") -> bool:
     otp = (OTPCode.query
            .filter_by(user_id=user.id, purpose=purpose, consumed_at=None)
            .order_by(OTPCode.created_at.desc())
            .first())
-    if not otp:
-        return False
-    if otp.expires_at < datetime.utcnow():
+    if not otp or otp.expires_at < datetime.utcnow():
         return False
     return verify_password(code, otp.code_hash)
 
@@ -453,21 +456,13 @@ def consume_latest_otp(user: User, purpose: str = "login") -> None:
 
 ---
 
-## Blueprint Auth : Register, Confirm Email, Login + OTP, JWT, Reset Password
+## 10) Auth complète — `app/blueprints/auth.py`
 
-### Concepts
-
-* **Inscription** → on enregistre l’utilisateur **non confirmé**, puis on **envoie un email de confirmation** avec un **token** (itsdangerous).
-* **Confirmation** → l’utilisateur clique (ou envoie le token) pour activer `email_confirmed=True`.
-* **Login** → vérifie email & mot de passe, **envoie un OTP par email** (2FA), puis l’utilisateur appelle **/verify-otp** → on renvoie **access & refresh JWT**.
-* **Refresh** → renvoie un nouvel **access token**.
-* **Reset password** → 2 étapes : demander un lien (token), puis soumettre le nouveau mot de passe avec ce token.
-
-### `app/blueprints/auth.py`
+**Parcours** : Register → Email de confirmation → Login (envoi OTP) → Verify OTP (JWT) → Refresh → Reset Password.
 
 ```python
 from flask_smorest import Blueprint, abort
-from flask import url_for, current_app
+from flask import url_for
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 
@@ -494,14 +489,9 @@ class RegisterResource:
             db.session.rollback()
             abort(409, message="Email ou username déjà utilisé")
 
-        # Générer token de confirmation
         token = generate_token({"email": user.email}, salt="email-confirm")
         confirm_url = url_for("Auth.ConfirmEmailResource", token=token, _external=True)
-        send_email(
-            subject="[TodoAPI] Confirmez votre email",
-            recipients=[user.email],
-            body=f"Bienvenue ! Confirmez votre email : {confirm_url}"
-        )
+        send_email("[TodoAPI] Confirmez votre email", [user.email], f"Bienvenue ! Confirmez votre email : {confirm_url}")
         return user
 
 @blp.route("/confirm/<string:token>")
@@ -537,8 +527,6 @@ class LoginResource:
             abort(401, message="Identifiants invalides")
         if not user.email_confirmed:
             abort(403, message="Email non confirmé. Veuillez confirmer votre email.")
-
-        # Envoi OTP pour 2FA
         create_and_send_otp(user, purpose="login")
         return {"message": "OTP envoyé par email. Utilisez /auth/verify-otp."}
 
@@ -553,7 +541,6 @@ class VerifyOTPResource:
         if not verify_otp(user, data["code"], purpose="login"):
             abort(400, message="OTP invalide ou expiré")
         consume_latest_otp(user, purpose="login")
-
         access = create_access_token(identity=user.id, additional_claims={"username": user.username})
         refresh = create_refresh_token(identity=user.id)
         return {"access_token": access, "refresh_token": refresh}
@@ -586,7 +573,6 @@ class PerformPasswordResetResource:
     @blp.arguments(PasswordResetSchema)
     @blp.response(200)
     def post(self, data):
-        # token & new_password dans le corps
         payload = verify_token(data["token"], salt="password-reset", max_age_seconds=3600)
         user = User.query.filter_by(email=payload["email"].lower()).first_or_404()
         user.password_hash = hash_password(data["new_password"])
@@ -596,9 +582,7 @@ class PerformPasswordResetResource:
 
 ---
 
-## Blueprint Users : Profil
-
-### `app/blueprints/users.py`
+## 11) Profil — `app/blueprints/users.py`
 
 ```python
 from flask_smorest import Blueprint, abort
@@ -625,7 +609,6 @@ class MeResource:
         if "full_name" in data:
             user.full_name = data["full_name"]
         if "username" in data:
-            # Option simple : vérifier collision
             existing = User.query.filter(User.username == data["username"], User.id != user.id).first()
             if existing:
                 abort(409, message="Username déjà utilisé")
@@ -636,12 +619,9 @@ class MeResource:
 
 ---
 
-## Blueprints Category, Project, Task (CRUD protégés)
+## 12) CRUD Catégories, Projets, Tâches
 
-### Notes
-
-* **Toutes** ces routes exigent **JWT access**.
-* Chaque entité est **scopée par user** (les objets d’un user ne sont pas visibles par un autre).
+**Rappel sécurité** : tout est **protégé par JWT** et **scopé par `user_id`**.
 
 ### `app/blueprints/categories.py`
 
@@ -798,7 +778,6 @@ class TaskListResource:
     def post(self, data):
         uid = get_jwt_identity()
 
-        # Vérifications simples (ownership)
         if data.get("category_id"):
             if not Category.query.filter_by(id=data["category_id"], user_id=uid).first():
                 abort(400, message="Catégorie invalide")
@@ -831,7 +810,6 @@ class TaskDetailResource:
         if not task:
             abort(404, message="Tâche introuvable")
 
-        # Re-valider category/project
         if data.get("category_id"):
             if not Category.query.filter_by(id=data["category_id"], user_id=uid).first():
                 abort(400, message="Catégorie invalide")
@@ -858,158 +836,159 @@ class TaskDetailResource:
 
 ---
 
-## Documentation OpenAPI : Swagger & ReDoc
+## 13) Documentation OpenAPI (Swagger & ReDoc)
 
-Grâce à **Flask-Smorest**, la doc est générée automatiquement à partir des schémas & responses.
+* **Automatique** grâce à Flask-Smorest et vos schémas.
+* **Accès** :
 
-* **Swagger UI** : `http://127.0.0.1:5000/docs`
-* **ReDoc** : `http://127.0.0.1:5000/redoc`
-
-> Les descriptions/summary s’appuient sur les décorateurs `@blp.response`, `@blp.arguments`, etc., et le texte `description` fourni au Blueprint.
+  * Swagger UI → `/docs`
+  * ReDoc → `/redoc`
+* **Astuce** : mettez des descriptions claires dans vos `Blueprint(..., description="...")` et utilisez `@blp.response` / `@blp.arguments` pour des contrats d’API propres.
 
 ---
 
-## Migrations & Lancement
+## 14) Migrations & Lancement
 
-Initialisez la base et lancez le serveur :
+1. Initialiser & appliquer les migrations :
 
 ```bash
-# 1) Initialiser les migrations
 flask db init
-
-# 2) Générer le script de migration (tables User, OTP, Category, Project, Task)
 flask db migrate -m "init models"
-
-# 3) Appliquer
 flask db upgrade
-
-# 4) Lancer l'app
-flask run
 ```
 
-Démarrez un **SMTP de debug** (si besoin) dans un autre terminal :
+2. Lancer l’app (et un SMTP de test dans un autre terminal) :
 
 ```bash
+flask run
+# SMTP debug
 python -m smtpd -c DebuggingServer -n localhost:1025
 ```
 
-> Chaque email envoyé s’affichera dans la console.
-
 ---
 
-## Scénario de test (cURL/Postman)
+## 15) Scénario de test complet (cURL/Postman)
 
-1. **Register**
+### Register → Confirm
 
 ```bash
 curl -X POST http://127.0.0.1:5000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@example.com","username":"alice","password":"Secret123!"}'
+# Ouvrez l’URL de confirmation reçue dans la console SMTP
 ```
 
-→ consultez la console SMTP pour le lien de **confirmation**.
-
-2. **Confirmer l’email** (ouvrez l’URL reçue, ex: `/auth/confirm/<token>`).
-
-3. **Login** (déclenche envoi OTP)
+### Login → OTP → JWT
 
 ```bash
 curl -X POST http://127.0.0.1:5000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@example.com","password":"Secret123!"}'
-```
-
-→ vérifiez la console SMTP pour le **code OTP** (6 chiffres).
-
-4. **Vérifier OTP & recevoir JWT**
-
-```bash
+# Récupérez le code OTP (6 chiffres), puis :
 curl -X POST http://127.0.0.1:5000/auth/verify-otp \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@example.com","code":"123456"}'
+# => access_token + refresh_token
 ```
 
-→ récupérez `access_token` et `refresh_token`.
-
-5. **Créer une catégorie**
+### CRUD & Profil (avec Authorization: Bearer \<ACCESS\_TOKEN>)
 
 ```bash
+# Créer catégorie
 curl -X POST http://127.0.0.1:5000/categories/ \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
-  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <ACCESS>" -H "Content-Type: application/json" \
   -d '{"name":"Perso","description":"Tâches personnelles"}'
-```
 
-6. **Créer un projet**
-
-```bash
+# Créer projet
 curl -X POST http://127.0.0.1:5000/projects/ \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
-  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <ACCESS>" -H "Content-Type: application/json" \
   -d '{"name":"Projet YouTube","description":"Demo Flask cours"}'
-```
 
-7. **Créer une tâche liée au projet & à la catégorie**
-
-```bash
+# Créer tâche liée
 curl -X POST http://127.0.0.1:5000/tasks/ \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
-  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <ACCESS>" -H "Content-Type: application/json" \
   -d '{"title":"Préparer miniatures","project_id":1,"category_id":1}'
+
+# Profil
+curl -H "Authorization: Bearer <ACCESS>" http://127.0.0.1:5000/users/me
 ```
 
-8. **Voir le profil**
-
-```bash
-curl -H "Authorization: Bearer <ACCESS_TOKEN>" http://127.0.0.1:5000/users/me
-```
-
-9. **Réinitialiser le mot de passe (demande)**
+### Reset Password
 
 ```bash
 curl -X POST http://127.0.0.1:5000/auth/request-password-reset \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@example.com"}'
-```
-
-→ récupérez le `token` de la console SMTP, puis :
-
-```bash
+# Récupérez le token (console SMTP), puis :
 curl -X POST http://127.0.0.1:5000/auth/reset-password \
   -H "Content-Type: application/json" \
   -d '{"token":"<TOKEN>","new_password":"NewPass123!"}'
 ```
 
-10. **Docs**
+### Documentation
 
-* Swagger: `http://127.0.0.1:5000/docs`
-* ReDoc: `http://127.0.0.1:5000/redoc`
+* Swagger → `http://127.0.0.1:5000/docs`
+* ReDoc → `http://127.0.0.1:5000/redoc`
 
 ---
 
-## Aller plus loin (sécurité, déploiement, CI)
+## 16) Débogage & erreurs fréquentes
+
+* **401 Missing Authorization Header** → Ajoutez `Authorization: Bearer <ACCESS_TOKEN>`.
+* **403 Email non confirmé** → Cliquez d’abord sur le lien `/auth/confirm/<token>`.
+* **400 OTP invalide/expiré** → Relancez `/auth/login` pour recevoir un nouveau code, vite.
+* **IntegrityError (duplicate)** → l’email/username existe déjà (on renvoie 409).
+* **SMTP silencieux** → vérifiez `MAIL_*` et que votre serveur SMTP de test tourne (1025).
+
+---
+
+## 17) Sécurité, déploiement & bonnes pratiques
 
 * **Sécurité**
 
-  * Utilisez **HTTPS** en prod.
-  * Stockez les secrets via variables d’environnement (pas dans le repo).
-  * Hash OTP (fait) & **expiration courte** (10 min).
-  * Limiter la fréquence de `/login` & `/verify-otp` (rate limiting).
-* **Base de données**
+  * HTTPS en prod (certificat).
+  * Ne logguez jamais mots de passe/OTP.
+  * **Access token** court (ex. 15 min), **Refresh** plus long (ex. 7–30 jours).
+  * (Option) **Rate limiting** via `Flask-Limiter` sur `/login` et `/verify-otp`.
+  * (Option) **CORS** via `Flask-CORS` si front séparé.
 
-  * Passez à PostgreSQL (SQLALCHEMY\_DATABASE\_URI comme `postgresql+psycopg2://user:pwd@host:5432/db`).
-* **Emails**
-
-  * Utilisez Mailtrap, SendGrid ou tout SMTP fiable.
 * **Déploiement**
 
-  * Gunicorn + Nginx (Docker conseillé).
-* **Tests & CI**
+  * Gunicorn (WSGI) + Nginx (reverse proxy).
+  * Docker (variables d’environnement pour secrets).
+  * DB managée (PostgreSQL).
+  * Appliquez `flask db upgrade` lors du déploiement.
 
-  * Ajoutez des tests `pytest` ou `unittest`, GitHub Actions, etc.
+* **Observabilité**
+
+  * Logging structuré (INFO/ERROR).
+  * Sentry (ou équivalent) pour exceptions.
 
 ---
 
-## Conclusion
+## 18) Annexes
 
-Vous avez une **API Flask professionnelle**, claire et pédagogique : **inscription, confirmation email, OTP, JWT, reset password, profil, catégories, projets, tâches**, avec une **documentation Swagger & ReDoc** prête pour vos étudiants.
+### A) Checklist “live demo”
+
+* ✅ `.env` rempli
+* ✅ `flask db init/migrate/upgrade`
+* ✅ `flask run` + SMTP de test
+* ✅ Parcours Register → Confirm → Login → OTP → Verify → CRUD → Docs
+
+### B) Glossaire
+
+WSGI, Blueprint, ORM, JWT, OTP, OpenAPI — **définitions courtes** expliquées en cours (voir sections).
+
+### C) Pistes d’évolution
+
+* Priorité de tâche, étiquettes, commentaires.
+* Partage/collaboration (multi-user).
+* Blocklist de refresh tokens (révocation).
+* Tests automatiques, CI/CD (GitHub Actions).
+* Envoi d’emails via un provider (Mailtrap/SendGrid).
+
+---
+
+
+Vous avez : **le pourquoi**, **le comment**, **le code** et **la méthode**.
+Ce cours est calibré pour des **débutants** et **suffisamment solide** pour un usage pro (OTP, JWT, doc, structure).
